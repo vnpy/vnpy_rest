@@ -119,6 +119,7 @@ class RestClient(object):
 
     def start(self, n: int = 3) -> None:
         """启动客户端的事件循环"""
+        # 如果事件循环已经在运行，则无需再次启动
         if self.loop.is_running():
             return
 
@@ -134,7 +135,8 @@ class RestClient(object):
 
     def join(self) -> None:
         """等待子线程退出"""
-        self.thread.join()
+        if self.thread and self.thread.is_alive():
+            self.thread.join()
 
     def add_request(
         self,
