@@ -23,7 +23,7 @@ ON_ERROR_TYPE = Callable[[Type, Exception, TracebackType, "Request"], None]
 class Request(object):
     """
     请求对象
-    
+
     method: API的请求方法（GET, POST, PUT, DELETE, QUERY）
     path: API的请求路径（不包含根地址）
     callback: 请求成功的回调函数
@@ -32,7 +32,7 @@ class Request(object):
     headers: 请求头部的字典
     on_failed: 请求失败的回调函数
     on_error: 请求异常的回调函数
-    extra: 任意其他数据（用于回调时获取）    
+    extra: 任意其他数据（用于回调时获取）
     """
 
     def __init__(
@@ -94,10 +94,11 @@ class Response:
         """"""
         self.status_code: int = status_code
         self.data: dict = data
-    
+
     def json(self) -> dict:
         """这里为了和requests.Response对象保持兼容"""
         return self.data
+
 
 class RestClient(object):
     """
@@ -181,8 +182,8 @@ class RestClient(object):
         """同步请求函数"""
         request: Request = Request(method, path, params, data, headers)
         coro: coroutine = self._get_response(request)
-        fut: Future = run_coroutine_threadsafe(coro)
-        return fut.result
+        fut: Future = run_coroutine_threadsafe(coro, self.loop)
+        return fut.result()
 
     def sign(self, request: Request) -> None:
         """签名函数（由用户继承实现具体签名逻辑）"""
