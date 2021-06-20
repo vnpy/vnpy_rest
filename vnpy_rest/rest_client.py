@@ -131,7 +131,10 @@ class RestClient(object):
 
     def start(self, session_number: int = 3) -> None:
         """启动客户端的事件循环"""
-        self.loop = start_event_loop()
+        if not self.loop:
+            self.loop = get_event_loop()
+
+        start_event_loop(self.loop)
 
     def stop(self) -> None:
         """停止客户端的事件循环"""
@@ -276,17 +279,13 @@ class RestClient(object):
         return url
 
 
-def start_event_loop() -> AbstractEventLoop:
+def start_event_loop(loop: AbstractEventLoop) -> None:
     """启动事件循环"""
-    loop: AbstractEventLoop = get_event_loop()
-
     # 如果事件循环未运行，则创建后台线程来运行
     if not loop.is_running():
         thread = Thread(target=run_event_loop, args=(loop,))
         thread.daemon = True
         thread.start()
-
-    return loop
 
 
 def run_event_loop(loop: AbstractEventLoop) -> None:
