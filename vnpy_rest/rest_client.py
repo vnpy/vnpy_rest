@@ -13,11 +13,20 @@ from asyncio import (
 )
 
 from aiohttp import ClientSession, ClientResponse
+from enum import Enum
 
 
 CALLBACK_TYPE = Callable[[dict, "Request"], None]
 ON_FAILED_TYPE = Callable[[int, "Request"], None]
 ON_ERROR_TYPE = Callable[[Type, Exception, TracebackType, "Request"], None]
+
+class RequestStatus(Enum):
+    """"""
+
+    ready = 0       # 创建请求
+    success = 1     # 请求成功
+    failed = 2      # 请求失败
+    error = 3       # 请求异常
 
 
 class Request(object):
@@ -60,6 +69,7 @@ class Request(object):
         self.extra: Any = extra
 
         self.response: "Response" = None
+        self.status: RequestStatus = RequestStatus.ready
 
     def __str__(self):
         """字符串表示"""
@@ -258,8 +268,10 @@ class RestClient(object):
             # 2xx的代码表示处理成功
             if status_code // 100 == 2:
                 request.callback(response.json(), request)
+                request.status = RequestStatus.success
             # 否则说明处理失败
             else:
+                request.status = RequestStatus.failed
                 # 设置了专用失败回调
                 if request.on_failed:
                     request.on_failed(status_code, request)
@@ -267,6 +279,7 @@ class RestClient(object):
                 else:
                     self.on_failed(status_code, request)
         except Exception:
+            request.status = RequestStatus.error
             t, v, tb = sys.exc_info()
             # 设置了专用异常回调
             if request.on_error:
