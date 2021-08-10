@@ -71,7 +71,7 @@ class Request(object):
             status_code = self.response.status_code
 
         return (
-            "request : {} {} {} because {}: \n"
+            "request : {} {} because {}: \n"
             "headers: {}\n"
             "params: {}\n"
             "data: {}\n"
@@ -79,7 +79,6 @@ class Request(object):
             "{}\n".format(
                 self.method,
                 self.path,
-                self.status.name,
                 status_code,
                 self.headers,
                 self.params,
@@ -197,7 +196,8 @@ class RestClient(object):
 
     def on_failed(self, status_code: int, request: Request) -> None:
         """请求失败的默认回调"""
-        sys.stderr.write(str(request))
+        print("RestClient on failed" + "-" * 10)
+        print(str(request))
 
     def on_error(
         self,
@@ -206,12 +206,12 @@ class RestClient(object):
         tb,
         request: Optional[Request],
     ) -> None:
-        """
-        请求触发异常的默认回调"""
-        sys.stderr.write(
-            self.exception_detail(exception_type, exception_value, tb, request)
-        )
-        sys.excepthook(exception_type, exception_value, tb)
+        """请求触发异常的默认回调"""
+        try:
+            print("RestClient on error" + "-" * 10)
+            print(self.exception_detail(exception_type, exception_value, tb, request))
+        except:
+            traceback.print_exc()
 
     def exception_detail(
         self,

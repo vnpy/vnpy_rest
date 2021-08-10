@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from .rest_client import Request, RestClient
+from .rest_client import RestClient, Request, Response
 
 import importlib_metadata
 
