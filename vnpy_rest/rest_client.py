@@ -1,3 +1,4 @@
+import json
 import sys
 import traceback
 from datetime import datetime
@@ -11,6 +12,7 @@ from asyncio import (
     AbstractEventLoop,
     Future
 )
+from json import loads
 
 from aiohttp import ClientSession, ClientResponse
 
@@ -90,14 +92,15 @@ class Request(object):
 class Response:
     """结果对象"""
 
-    def __init__(self, status_code: int, data: dict) -> None:
+    def __init__(self, status_code: int, text: str) -> None:
         """"""
         self.status_code: int = status_code
-        self.data: dict = data
+        self.text: str = text
 
     def json(self) -> dict:
-        """这里为了和requests.Response对象保持兼容"""
-        return self.data
+        """获取字符串对应的JSON格式数据"""
+        data = loads(self.text)
+        return data
 
 
 class RestClient(object):
@@ -241,10 +244,11 @@ class RestClient(object):
             data=request.data,
             proxy=self.proxy
         )
-        data: dict = await cr.json()
+
+        text: str = await cr.text()
         status_code = cr.status
 
-        request.response = Response(status_code, data)
+        request.response = Response(status_code, text)
         return request.response
 
     async def _process_request(self, request: Request) -> None:
