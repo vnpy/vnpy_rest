@@ -116,7 +116,7 @@ class RestClient(object):
         self.url_base: str = ""
         self.proxy: str = ""
 
-        self.session: ClientSession = ClientSession()
+        self.session: ClientSession = ClientSession(trust_env=True)
         self.loop: AbstractEventLoop = None
 
     def init(
