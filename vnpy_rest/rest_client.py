@@ -90,11 +90,10 @@ class Request(object):
 class Response:
     """结果对象"""
 
-    def __init__(self, status_code: int, data: dict, text: str) -> None:
+    def __init__(self, status_code: int, data: dict) -> None:
         """"""
         self.status_code: int = status_code
         self.data: dict = data
-        self.text: str = text
 
     def json(self) -> dict:
         """这里为了和requests.Response对象保持兼容"""
@@ -242,11 +241,10 @@ class RestClient(object):
             data=request.data,
             proxy=self.proxy
         )
-        text: str = await cr.text()
         data: dict = await cr.json()
         status_code = cr.status
 
-        request.response = Response(status_code, data, text)
+        request.response = Response(status_code, data)
         return request.response
 
     async def _process_request(self, request: Request) -> None:
