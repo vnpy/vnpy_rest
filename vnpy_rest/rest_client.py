@@ -1,3 +1,4 @@
+import json
 import sys
 import traceback
 from datetime import datetime
@@ -11,6 +12,7 @@ from asyncio import (
     AbstractEventLoop,
     Future
 )
+from json import loads
 
 from aiohttp import ClientSession, ClientResponse
 
@@ -69,7 +71,7 @@ class Request(object):
             status_code = self.response.status_code
 
         return (
-            "request : {} {} {} because {}: \n"
+            "request : {} {} because {}: \n"
             "headers: {}\n"
             "params: {}\n"
             "data: {}\n"
@@ -77,7 +79,6 @@ class Request(object):
             "{}\n".format(
                 self.method,
                 self.path,
-                self.status.name,
                 status_code,
                 self.headers,
                 self.params,
@@ -90,14 +91,15 @@ class Request(object):
 class Response:
     """结果对象"""
 
-    def __init__(self, status_code: int, data: dict) -> None:
+    def __init__(self, status_code: int, text: str) -> None:
         """"""
         self.status_code: int = status_code
-        self.data: dict = data
+        self.text: str = text
 
     def json(self) -> dict:
-        """这里为了和requests.Response对象保持兼容"""
-        return self.data
+        """获取字符串对应的JSON格式数据"""
+        data = loads(self.text)
+        return data
 
 
 class RestClient(object):
@@ -194,7 +196,8 @@ class RestClient(object):
 
     def on_failed(self, status_code: int, request: Request) -> None:
         """请求失败的默认回调"""
-        sys.stderr.write(str(request))
+        print("RestClient on failed" + "-" * 10)
+        print(str(request))
 
     def on_error(
         self,
@@ -203,12 +206,12 @@ class RestClient(object):
         tb,
         request: Optional[Request],
     ) -> None:
-        """
-        请求触发异常的默认回调"""
-        sys.stderr.write(
-            self.exception_detail(exception_type, exception_value, tb, request)
-        )
-        sys.excepthook(exception_type, exception_value, tb)
+        """请求触发异常的默认回调"""
+        try:
+            print("RestClient on error" + "-" * 10)
+            print(self.exception_detail(exception_type, exception_value, tb, request))
+        except:
+            traceback.print_exc()
 
     def exception_detail(
         self,
@@ -241,10 +244,11 @@ class RestClient(object):
             data=request.data,
             proxy=self.proxy
         )
-        data: dict = await cr.json()
+
+        text: str = await cr.text()
         status_code = cr.status
 
-        request.response = Response(status_code, data)
+        request.response = Response(status_code, text)
         return request.response
 
     async def _process_request(self, request: Request) -> None:
