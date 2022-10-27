@@ -1,4 +1,3 @@
-import json
 import sys
 import traceback
 from datetime import datetime
@@ -210,7 +209,7 @@ class RestClient(object):
         try:
             print("RestClient on error" + "-" * 10)
             print(self.exception_detail(exception_type, exception_value, tb, request))
-        except:
+        except Exception:
             traceback.print_exc()
 
     def exception_detail(

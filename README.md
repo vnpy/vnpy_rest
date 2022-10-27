@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-    <img src ="https://img.shields.io/badge/version-1.0.2-blueviolet.svg"/>
+    <img src ="https://img.shields.io/badge/version-1.0.3-blueviolet.svg"/>
     <img src ="https://img.shields.io/badge/platform-windows|linux|macos-yellow.svg"/>
     <img src ="https://img.shields.io/badge/python-3.7-blue.svg" />
     <img src ="https://img.shields.io/github/license/vnpy/vnpy.svg?color=orange"/>
@@ -13,11 +13,11 @@
 
 ## 说明
 
-基于asyncio和aiohttp开发的协程异步REST API客户端，用于开发高性能的数字货币交易接口。
+基于asyncio和aiohttp开发的协程异步REST API客户端，用于开发高性能的REST交易接口。
 
 ## 安装
 
-安装需要基于2.2.0版本以上的[VN Studio](https://www.vnpy.com)。
+安装需要基2.6.0版本以上的[VN Studio](https://www.vnpy.com)。
 
 直接使用pip命令：
 
