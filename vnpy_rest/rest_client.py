@@ -5,7 +5,8 @@ from typing import Any, Callable, Optional, Union, Type
 from types import TracebackType, coroutine
 from threading import Thread
 from asyncio import (
-    get_event_loop,
+    get_running_loop,
+    new_event_loop,
     set_event_loop,
     run_coroutine_threadsafe,
     AbstractEventLoop,
@@ -115,7 +116,7 @@ class RestClient(object):
         self.url_base: str = ""
         self.proxy: str = ""
 
-        self.session: ClientSession = ClientSession(trust_env=True)
+        self.session: ClientSession = None
         self.loop: AbstractEventLoop = None
 
     def init(
@@ -132,8 +133,10 @@ class RestClient(object):
 
     def start(self, session_number: int = 3) -> None:
         """启动客户端的事件循环"""
-        if not self.loop:
-            self.loop = get_event_loop()
+        try:
+            self.loop = get_running_loop()
+        except RuntimeError:
+            self.loop = new_event_loop()
 
         start_event_loop(self.loop)
 
@@ -234,6 +237,9 @@ class RestClient(object):
         """发送请求到服务器，并返回处理结果对象"""
         request = self.sign(request)
         url = self._make_full_url(request.path)
+
+        if not self.session:
+            self.session = ClientSession(trust_env=True)
 
         cr: ClientResponse = await self.session.request(
             request.method,
