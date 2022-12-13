@@ -25,4 +25,7 @@ from .rest_client import RestClient, Request, Response
 import importlib_metadata
 
 
-__version__ = importlib_metadata.version("vnpy_rest")
+try:
+    __version__ = importlib_metadata.version("vnpy_rest")
+except importlib_metadata.PackageNotFoundError:
+    __version__ = "dev"
