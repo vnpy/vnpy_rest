@@ -114,7 +114,7 @@ class RestClient(object):
     def __init__(self):
         """"""
         self.url_base: str = ""
-        self.proxy: str = ""
+        self.proxy: str = None
 
         self.session: ClientSession = None
         self.loop: AbstractEventLoop = None
