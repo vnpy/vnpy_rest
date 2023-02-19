@@ -1,5 +1,6 @@
 import sys
 import traceback
+import platform
 from datetime import datetime
 from typing import Any, Callable, Optional, Union, Type
 from types import TracebackType, coroutine
@@ -10,11 +11,18 @@ from asyncio import (
     set_event_loop,
     run_coroutine_threadsafe,
     AbstractEventLoop,
-    Future
+    Future,
+    set_event_loop_policy,
+    WindowsSelectorEventLoopPolicy
 )
 from json import loads
 
 from aiohttp import ClientSession, ClientResponse
+
+
+# 在Windows系统上必须使用Selector事件循环，否则可能导致程序崩溃
+if platform.system() == 'Windows':
+    set_event_loop_policy(WindowsSelectorEventLoopPolicy())
 
 
 CALLBACK_TYPE = Callable[[dict, "Request"], None]
