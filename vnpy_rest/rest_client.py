@@ -12,8 +12,7 @@ from asyncio import (
     run_coroutine_threadsafe,
     AbstractEventLoop,
     Future,
-    set_event_loop_policy,
-    WindowsSelectorEventLoopPolicy
+    set_event_loop_policy
 )
 from json import loads
 
@@ -22,6 +21,7 @@ from aiohttp import ClientSession, ClientResponse
 
 # 在Windows系统上必须使用Selector事件循环，否则可能导致程序崩溃
 if platform.system() == 'Windows':
+    from asyncio import WindowsSelectorEventLoopPolicy
     set_event_loop_policy(WindowsSelectorEventLoopPolicy())
 
 
