@@ -150,6 +150,10 @@ class RestClient(object):
 
     def stop(self) -> None:
         """停止客户端的事件循环"""
+        if self.session:
+            coro = self.session.close()
+            run_coroutine_threadsafe(coro, self.loop)
+
         if self.loop and self.loop.is_running():
             self.loop.stop()
 
