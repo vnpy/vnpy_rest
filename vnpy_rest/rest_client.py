@@ -16,7 +16,7 @@ from asyncio import (
 )
 from json import loads
 
-from aiohttp import ClientSession, ClientResponse
+from aiohttp import ClientSession, ClientResponse, TCPConnector
 
 
 # 在Windows系统上必须使用Selector事件循环，否则可能导致程序崩溃
@@ -124,8 +124,10 @@ class RestClient(object):
         self.url_base: str = ""
         self.proxy: str = None
 
-        self.session: ClientSession = None
+        self.sessions: list[ClientSession] = []
         self.loop: AbstractEventLoop = None
+
+        self.local_hosts: list[str] = []
 
     def init(
         self,
@@ -246,10 +248,19 @@ class RestClient(object):
         request = self.sign(request)
         url = self._make_full_url(request.path)
 
-        if not self.session:
-            self.session = ClientSession(trust_env=True)
+        if not self.sessions:
+            if self.local_hosts:
+                for host in self.local_hosts:
+                    conn: TCPConnector = TCPConnector(local_addr=(host, 0)) 
+                    session: ClientSession = ClientSession(connector=conn, trust_env=True)
+                    self.sessions.append(session)
+            else:
+                self.sessions.append(ClientSession(trust_env=True))
 
-        cr: ClientResponse = await self.session.request(
+        session: ClientSession = self.sessions.pop(0)
+        self.sessions.append(session)
+
+        cr: ClientResponse = await session.request(
             request.method,
             url,
             headers=request.headers,
