@@ -199,9 +199,10 @@ class RestClient(object):
         params: dict = None,
         data: dict = None,
         headers: dict = None,
+        json: dict = None
     ) -> Response:
         """同步请求函数"""
-        request: Request = Request(method, path, params, data, headers)
+        request: Request = Request(method, path, params, data, json, headers)
         coro: coroutine = self._get_response(request)
         fut: Future = run_coroutine_threadsafe(coro, self.loop)
         return fut.result()
