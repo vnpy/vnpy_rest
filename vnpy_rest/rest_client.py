@@ -127,7 +127,7 @@ class RestClient(object):
         """"""
         self.url_base: str = ""
         self.proxy: str = None
-
+        self.verify_ssl: bool = False  # 金泽宽（nbjjy）修改于2024-07-17
         self.session: ClientSession = None
         self.loop: AbstractEventLoop = None
 
@@ -263,7 +263,8 @@ class RestClient(object):
             params=request.params,
             data=request.data,
             json=request.json,
-            proxy=self.proxy
+            proxy=self.proxy,
+            verify_ssl=self.verify_ssl,    # 金泽宽（nbjjy）修改于2024-07-17 主要作用是去掉验证SSL证书错误的提示
         )
 
         text: str = await cr.text()
