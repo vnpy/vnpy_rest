@@ -146,8 +146,6 @@ class RestClient(object):
 
     def start(self) -> None:
         """启动客户端的事件循环"""
-        self.connector = TCPConnector(verify_ssl=False)
-
         try:
             self.loop = get_running_loop()
         except RuntimeError:
@@ -255,6 +253,9 @@ class RestClient(object):
         """发送请求到服务器，并返回处理结果对象"""
         request = self.sign(request)
         url = self._make_full_url(request.path)
+
+        if not self.connector:
+            self.connector = TCPConnector(verify_ssl=False)
 
         if not self.session:
             self.session = ClientSession(
