@@ -51,6 +51,7 @@ class Request(object):
         path: str,
         params: dict,
         data: Union[dict, str, bytes],
+        json: dict,
         headers: dict,
         callback: CALLBACK_TYPE = None,
         on_failed: ON_FAILED_TYPE = None,
@@ -63,6 +64,7 @@ class Request(object):
         self.callback: CALLBACK_TYPE = callback
         self.params: dict = params
         self.data: Union[dict, str, bytes] = data
+        self.json: dict = json
         self.headers: dict = headers
 
         self.on_failed: ON_FAILED_TYPE = on_failed
@@ -83,6 +85,7 @@ class Request(object):
             "headers: {}\n"
             "params: {}\n"
             "data: {}\n"
+            "json: {}\n"
             "response:"
             "{}\n".format(
                 self.method,
@@ -91,6 +94,7 @@ class Request(object):
                 self.headers,
                 self.params,
                 self.data,
+                self.json,
                 "" if self.response is None else self.response.text,
             )
         )
@@ -141,7 +145,7 @@ class RestClient(object):
         if proxy_host and proxy_port:
             self.proxy = f"http://{proxy_host}:{proxy_port}"
 
-    def start(self, session_number: int = 3) -> None:
+    def start(self) -> None:
         """启动客户端的事件循环"""
         try:
             self.loop = get_running_loop()
@@ -166,6 +170,7 @@ class RestClient(object):
         callback: CALLBACK_TYPE,
         params: dict = None,
         data: Union[dict, str, bytes] = None,
+        json: dict = None,
         headers: dict = None,
         on_failed: ON_FAILED_TYPE = None,
         on_error: ON_ERROR_TYPE = None,
@@ -177,6 +182,7 @@ class RestClient(object):
             path,
             params,
             data,
+            json,
             headers,
             callback,
             on_failed,
@@ -195,9 +201,10 @@ class RestClient(object):
         params: dict = None,
         data: dict = None,
         headers: dict = None,
+        json: dict = None
     ) -> Response:
         """同步请求函数"""
-        request: Request = Request(method, path, params, data, headers)
+        request: Request = Request(method, path, params, data, json, headers)
         coro: coroutine = self._get_response(request)
         fut: Future = run_coroutine_threadsafe(coro, self.loop)
         return fut.result()
@@ -266,6 +273,7 @@ class RestClient(object):
             headers=request.headers,
             params=request.params,
             data=request.data,
+            json=request.json,
             proxy=self.proxy
         )
 
