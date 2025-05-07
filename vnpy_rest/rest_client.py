@@ -109,7 +109,7 @@ class RestClient:
         self.url_base = url_base
 
         if proxy_host and proxy_port:
-            proxy = f"http://{proxy_host}:{proxy_port}"
+            proxy: str = f"http://{proxy_host}:{proxy_port}"
             self.proxies = {"http": proxy, "https": proxy}
 
     def start(self, n: int = 5) -> None:
@@ -187,9 +187,9 @@ class RestClient:
                 except Empty:
                     pass
         except Exception:
-            et, ev, tb = sys.exc_info()
-            if et and ev and tb:
-                self.on_error(et, ev, tb, None)
+            exc, value, tb = sys.exc_info()
+            if exc and value and tb:
+                self.on_error(exc, value, tb, None)
 
     def sign(self, request: Request) -> Request:
         """
@@ -212,47 +212,45 @@ class RestClient:
 
     def on_error(
         self,
-        exception_type: type[BaseException],
-        exception_value: BaseException,
+        exc: type[BaseException],
+        value: BaseException,
         tb: TracebackType,
         request: Request | None,
     ) -> None:
         """
         Default callback for request exceptions
 
-        :param exception_type: Exception class
-        :param exception_value: Exception instance
+        :param exc: Exception class
+        :param value: Exception instance
         :param tb: Traceback object
         :param request: Request that caused the exception
         """
         try:
             print("RestClient on error" + "-" * 10)
-            print(self.exception_detail(exception_type, exception_value, tb, request))
+            print(self.exception_detail(exc, value, tb, request))
         except Exception:
             traceback.print_exc()
 
     def exception_detail(
         self,
-        exception_type: type[BaseException],
-        exception_value: BaseException,
+        exc: type[BaseException],
+        value: BaseException,
         tb: TracebackType,
         request: Request | None,
     ) -> str:
         """
         Convert exception information to string
 
-        :param exception_type: Exception class
-        :param exception_value: Exception instance
+        :param exc: Exception class
+        :param value: Exception instance
         :param tb: Traceback object
         :param request: Request that caused the exception
         :return: Formatted exception details
         """
-        text = f"[{datetime.now().isoformat()}]: Unhandled RestClient Error:{exception_type}\n"
+        text = f"[{datetime.now().isoformat()}]: Unhandled RestClient Error:{exc}\n"
         text += f"request:{request}\n"
         text += "Exception trace: \n"
-        text += "".join(
-            traceback.format_exception(exception_type, exception_value, tb)
-        )
+        text += "".join(traceback.format_exception(exc, value, tb))
         return text
 
     def process_request(self, request: Request, session: requests.Session) -> None:
@@ -297,14 +295,14 @@ class RestClient:
                     self.on_failed(status_code, request)
         except Exception:
             # Get exception information
-            et, ev, tb = sys.exc_info()
+            exc, value, tb = sys.exc_info()
 
             # Push exception callback
-            if et and ev and tb:
+            if exc and value and tb:
                 if request.on_error:
-                    request.on_error(et, ev, tb, request)
+                    request.on_error(exc, value, tb, request)
                 else:
-                    self.on_error(et, ev, tb, request)
+                    self.on_error(exc, value, tb, request)
 
     def make_full_url(self, path: str) -> str:
         """
