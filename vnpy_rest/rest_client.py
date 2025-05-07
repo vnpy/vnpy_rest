@@ -20,18 +20,19 @@ ON_ERROR_TYPE = Callable[[type[BaseException], BaseException, TracebackType, "Re
 Response = requests.Response
 
 
-class RequestStatus(Enum):
-    """"""
-
-    ready = 0       # Request created
-    success = 1     # Request successful (status code 2xx)
-    failed = 2      # Request failed (status code not 2xx)
-    error = 3       # Exception raised
-
-
 class Request:
     """
-    Request object for status check.
+    请求对象
+
+    method: API的请求方法（GET, POST, PUT, DELETE, QUERY）
+    path: API的请求路径（不包含根地址）
+    callback: 请求成功的回调函数
+    params: 请求表单的参数字典
+    data: 请求主体数据，如果传入字典会被自动转换为json
+    headers: 请求头部的字典
+    on_failed: 请求失败的回调函数
+    on_error: 请求异常的回调函数
+    extra: 任意其他数据（用于回调时获取）
     """
 
     def __init__(
@@ -59,7 +60,6 @@ class Request:
         self.extra: Any | None = extra
 
         self.response: requests.Response | None = None
-        self.status: RequestStatus = RequestStatus.ready
 
     def __str__(self) -> str:
         """"""
@@ -68,7 +68,7 @@ class Request:
         else:
             status_code = str(self.response.status_code)
 
-        text: str = f"request : {self.method} {self.path} {self.status.name} because {status_code}: \n"
+        text: str = f"request : {self.method} {self.path} because {status_code}: \n"
         text += f"headers: {self.headers}\n"
         text += f"params: {self.params}\n"
         text += f"data: {self.data!r}\n"
@@ -235,9 +235,7 @@ class RestClient:
         )
         return text
 
-    def _process_request(
-        self, request: Request, session: requests.Session
-    ) -> None:
+    def _process_request(self, request: Request, session: requests.Session) -> None:
         """
         Sending request to server and get result.
         """
@@ -264,17 +262,12 @@ class RestClient:
 
                 if request.callback:
                     request.callback(json_body, request)
-
-                request.status = RequestStatus.success
             else:
-                request.status = RequestStatus.failed
-
                 if request.on_failed:
                     request.on_failed(status_code, request)
                 else:
                     self.on_failed(status_code, request)
         except Exception:
-            request.status = RequestStatus.error
             et, ev, tb = sys.exc_info()
 
             if et and ev and tb:
