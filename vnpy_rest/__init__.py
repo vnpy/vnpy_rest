@@ -22,10 +22,12 @@
 
 from .rest_client import RestClient, Request, Response
 
-import importlib_metadata
+
+__all__ = [
+    "RestClient",
+    "Request",
+    "Response"
+]
 
 
-try:
-    __version__ = importlib_metadata.version("vnpy_rest")
-except importlib_metadata.PackageNotFoundError:
-    __version__ = "dev"
+__version__ = "1.2.0"

@@ -1,137 +1,98 @@
 import sys
 import traceback
-import platform
 from datetime import datetime
-from typing import Any, Callable, Optional, Union, Type
-from types import TracebackType, coroutine
-from threading import Thread
-from asyncio import (
-    get_running_loop,
-    new_event_loop,
-    set_event_loop,
-    run_coroutine_threadsafe,
-    AbstractEventLoop,
-    Future,
-    set_event_loop_policy
-)
-from json import loads
+from enum import Enum
+from multiprocessing.dummy import Pool
+from multiprocessing.pool import ThreadPool
+from queue import Empty, Queue
+from typing import Any
+from collections.abc import Callable
+from types import TracebackType
 
-from aiohttp import ClientSession, ClientResponse, TCPConnector
+import requests
 
 
-# 在Windows系统上必须使用Selector事件循环，否则可能导致程序崩溃
-if platform.system() == 'Windows':
-    from asyncio import WindowsSelectorEventLoopPolicy
-    set_event_loop_policy(WindowsSelectorEventLoopPolicy())
+CALLBACK_TYPE = Callable[[dict | None, "Request"], Any]
+ON_FAILED_TYPE = Callable[[int, "Request"], Any]
+ON_ERROR_TYPE = Callable[[type[BaseException], BaseException, TracebackType, "Request"], Any]
 
 
-CALLBACK_TYPE = Callable[[dict, "Request"], None]
-ON_FAILED_TYPE = Callable[[int, "Request"], None]
-ON_ERROR_TYPE = Callable[[Type, Exception, TracebackType, "Request"], None]
+Response = requests.Response
 
 
-class Request(object):
+class RequestStatus(Enum):
+    """"""
+
+    ready = 0       # Request created
+    success = 1     # Request successful (status code 2xx)
+    failed = 2      # Request failed (status code not 2xx)
+    error = 3       # Exception raised
+
+
+class Request:
     """
-    请求对象
-
-    method: API的请求方法（GET, POST, PUT, DELETE, QUERY）
-    path: API的请求路径（不包含根地址）
-    callback: 请求成功的回调函数
-    params: 请求表单的参数字典
-    data: 请求主体数据，如果传入字典会被自动转换为json
-    headers: 请求头部的字典
-    on_failed: 请求失败的回调函数
-    on_error: 请求异常的回调函数
-    extra: 任意其他数据（用于回调时获取）
+    Request object for status check.
     """
 
     def __init__(
         self,
         method: str,
         path: str,
-        params: dict,
-        data: Union[dict, str, bytes],
-        json: dict,
-        headers: dict,
-        callback: CALLBACK_TYPE = None,
-        on_failed: ON_FAILED_TYPE = None,
-        on_error: ON_ERROR_TYPE = None,
-        extra: Any = None,
+        params: dict | None,
+        data: dict | str | None,
+        headers: dict | None,
+        callback: CALLBACK_TYPE | None = None,
+        on_failed: ON_FAILED_TYPE | None = None,
+        on_error: ON_ERROR_TYPE | None = None,
+        extra: Any | None = None,
     ):
         """"""
         self.method: str = method
         self.path: str = path
-        self.callback: CALLBACK_TYPE = callback
-        self.params: dict = params
-        self.data: Union[dict, str, bytes] = data
-        self.json: dict = json
-        self.headers: dict = headers
+        self.callback: CALLBACK_TYPE | None = callback
+        self.params: dict | None = params
+        self.data: dict | str | None = data
+        self.headers: dict | None = headers
 
-        self.on_failed: ON_FAILED_TYPE = on_failed
-        self.on_error: ON_ERROR_TYPE = on_error
-        self.extra: Any = extra
+        self.on_failed: ON_FAILED_TYPE | None = on_failed
+        self.on_error: ON_ERROR_TYPE | None = on_error
+        self.extra: Any | None = extra
 
-        self.response: "Response" = None
+        self.response: requests.Response | None = None
+        self.status: RequestStatus = RequestStatus.ready
 
-    def __str__(self):
-        """字符串表示"""
+    def __str__(self) -> str:
+        """"""
         if self.response is None:
             status_code = "terminated"
         else:
-            status_code = self.response.status_code
+            status_code = str(self.response.status_code)
 
-        return (
-            "request : {} {} because {}: \n"
-            "headers: {}\n"
-            "params: {}\n"
-            "data: {}\n"
-            "json: {}\n"
-            "response:"
-            "{}\n".format(
-                self.method,
-                self.path,
-                status_code,
-                self.headers,
-                self.params,
-                self.data,
-                self.json,
-                "" if self.response is None else self.response.text,
-            )
-        )
+        text: str = f"request : {self.method} {self.path} {self.status.name} because {status_code}: \n"
+        text += f"headers: {self.headers}\n"
+        text += f"params: {self.params}\n"
+        text += f"data: {self.data!r}\n"
+        text += f"response: {self.response.text if self.response else ''}\n"
+        return text
 
 
-class Response:
-    """结果对象"""
-
-    def __init__(self, status_code: int, text: str) -> None:
-        """"""
-        self.status_code: int = status_code
-        self.text: str = text
-
-    def json(self) -> dict:
-        """获取字符串对应的JSON格式数据"""
-        data = loads(self.text)
-        return data
-
-
-class RestClient(object):
+class RestClient:
     """
-    针对各类RestFul API的异步客户端
-
-    * 重载sign方法来实现请求签名逻辑
-    * 重载on_failed方法来实现请求失败的标准回调处理
-    * 重载on_error方法来实现请求异常的标准回调处理
+    HTTP Client designed for all sorts of trading RESTFul API.
+    * Reimplement sign function to add signature function.
+    * Reimplement on_failed function to handle Non-2xx responses.
+    * Use on_failed parameter in add_request function for individual Non-2xx response handling.
+    * Reimplement on_error function to handle exception msg.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """"""
         self.url_base: str = ""
-        self.proxy: str = None
+        self._active: bool = False
 
-        self.sessions: list[ClientSession] = []
-        self.loop: AbstractEventLoop = None
+        self._queue: Queue = Queue()
 
-        self.local_hosts: list[str] = []
+        self.proxies: dict | None = None
 
     def init(
         self,
@@ -139,192 +100,231 @@ class RestClient(object):
         proxy_host: str = "",
         proxy_port: int = 0
     ) -> None:
-        """传入REST API的根地址，初始化客户端"""
+        """
+        Init rest client with url_base which is the API root address.
+        e.g. "https://www.bitmex.com/api/v1/"
+        """
         self.url_base = url_base
 
         if proxy_host and proxy_port:
-            self.proxy = f"http://{proxy_host}:{proxy_port}"
+            proxy = f"http://{proxy_host}:{proxy_port}"
+            self.proxies = {"http": proxy, "https": proxy}
 
-    def start(self) -> None:
-        """启动客户端的事件循环"""
-        try:
-            self.loop = get_running_loop()
-        except RuntimeError:
-            self.loop = new_event_loop()
+    def start(self, n: int = 3) -> None:
+        """
+        Start rest client with session count n.
+        """
+        if self._active:
+            return
 
-        start_event_loop(self.loop)
+        self._active = True
+
+        self._pool: ThreadPool = Pool(n)
+        self._pool.apply_async(self._run)
 
     def stop(self) -> None:
-        """停止客户端的事件循环"""
-        if self.loop and self.loop.is_running():
-            self.loop.stop()
+        """
+        Stop rest client immediately.
+        """
+        self._active = False
 
     def join(self) -> None:
-        """等待子线程退出"""
-        pass
+        """
+        Wait till all requests are processed.
+        """
+        self._queue.join()
 
     def add_request(
         self,
         method: str,
         path: str,
         callback: CALLBACK_TYPE,
-        params: dict = None,
-        data: Union[dict, str, bytes] = None,
-        json: dict = None,
-        headers: dict = None,
-        on_failed: ON_FAILED_TYPE = None,
-        on_error: ON_ERROR_TYPE = None,
-        extra: Any = None,
+        params: dict | None = None,
+        data: dict | str | None = None,
+        headers: dict | None = None,
+        on_failed: ON_FAILED_TYPE | None = None,
+        on_error: ON_ERROR_TYPE | None = None,
+        extra: Any | None = None,
     ) -> Request:
-        """添加新的请求任务"""
-        request: Request = Request(
+        """
+        Add a new request.
+        :param method: GET, POST, PUT, DELETE, QUERY
+        :param path: url path for query
+        :param callback: callback function if 2xx status, type: (dict, Request)
+        :param params: dict for query string
+        :param data: Http body. If it is a dict, it will be converted to form-data. Otherwise, it will be converted to bytes.
+        :param headers: dict for headers
+        :param on_failed: callback function if Non-2xx status, type, type: (code, dict, Request)
+        :param on_error: callback function when catching Python exception, type: (etype, evalue, tb, Request)
+        :param extra: Any extra data which can be used when handling callback
+        :return: Request
+        """
+        request = Request(
             method,
             path,
             params,
             data,
-            json,
             headers,
             callback,
             on_failed,
             on_error,
             extra,
         )
-
-        coro: coroutine = self._process_request(request)
-        run_coroutine_threadsafe(coro, self.loop)
+        self._queue.put(request)
         return request
 
-    def request(
-        self,
-        method: str,
-        path: str,
-        params: dict = None,
-        data: dict = None,
-        headers: dict = None,
-        json: dict = None
-    ) -> Response:
-        """同步请求函数"""
-        request: Request = Request(method, path, params, data, json, headers)
-        coro: coroutine = self._get_response(request)
-        fut: Future = run_coroutine_threadsafe(coro, self.loop)
-        return fut.result()
+    def _run(self) -> None:
+        """"""
+        try:
+            session = requests.session()
+            while self._active:
+                try:
+                    request = self._queue.get(timeout=1)
+                    try:
+                        self._process_request(request, session)
+                    finally:
+                        self._queue.task_done()
+                except Empty:
+                    pass
+        except Exception:
+            et, ev, tb = sys.exc_info()
+            if et and ev and tb:
+                self.on_error(et, ev, tb, None)
 
-    def sign(self, request: Request) -> None:
-        """签名函数（由用户继承实现具体签名逻辑）"""
+    def sign(self, request: Request) -> Request:
+        """
+        This function is called before sending any request out.
+        Please implement signature method here.
+        @:return (request)
+        """
         return request
 
     def on_failed(self, status_code: int, request: Request) -> None:
-        """请求失败的默认回调"""
-        print("RestClient on failed" + "-" * 10)
-        print(str(request))
+        """
+        Default on_failed handler for Non-2xx response.
+        """
+        sys.stderr.write(str(request))
 
     def on_error(
         self,
-        exception_type: type,
-        exception_value: Exception,
-        tb,
-        request: Optional[Request],
+        exception_type: type[BaseException],
+        exception_value: BaseException,
+        tb: TracebackType,
+        request: Request | None,
     ) -> None:
-        """请求触发异常的默认回调"""
-        try:
-            print("RestClient on error" + "-" * 10)
-            print(self.exception_detail(exception_type, exception_value, tb, request))
-        except Exception:
-            traceback.print_exc()
+        """
+        Default on_error handler for Python exception.
+        """
+        text: str = self.exception_detail(exception_type, exception_value, tb, request)
+        sys.stderr.write(text)
+
+        sys.excepthook(exception_type, exception_value, tb)
 
     def exception_detail(
         self,
-        exception_type: type,
-        exception_value: Exception,
-        tb,
-        request: Optional[Request],
-    ) -> None:
-        """将异常信息转化生成字符串"""
-        text = "[{}]: Unhandled RestClient Error:{}\n".format(
-            datetime.now().isoformat(), exception_type
-        )
-        text += "request:{}\n".format(request)
+        exception_type: type[BaseException],
+        exception_value: BaseException,
+        tb: TracebackType,
+        request: Request | None,
+    ) -> str:
+        text = f"[{datetime.now().isoformat()}]: Unhandled RestClient Error:{exception_type}\n"
+        text += f"request:{request}\n"
         text += "Exception trace: \n"
         text += "".join(
             traceback.format_exception(exception_type, exception_value, tb)
         )
         return text
 
-    async def _get_response(self, request: Request) -> Response:
-        """发送请求到服务器，并返回处理结果对象"""
-        request = self.sign(request)
-        url = self._make_full_url(request.path)
+    def _process_request(
+        self, request: Request, session: requests.Session
+    ) -> None:
+        """
+        Sending request to server and get result.
+        """
+        try:
+            request = self.sign(request)
 
-        if not self.sessions:
-            if self.local_hosts:
-                for host in self.local_hosts:
-                    conn: TCPConnector = TCPConnector(local_addr=(host, 0)) 
-                    session: ClientSession = ClientSession(connector=conn, trust_env=True)
-                    self.sessions.append(session)
+            url = self.make_full_url(request.path)
+
+            response = session.request(
+                request.method,
+                url,
+                headers=request.headers,
+                params=request.params,
+                data=request.data,
+                proxies=self.proxies,
+            )
+            request.response = response
+            status_code = response.status_code
+            if status_code // 100 == 2:  # 2xx codes are all successful
+                json_body: dict | None = None
+
+                if status_code != 204:
+                    json_body = response.json()
+
+                if request.callback:
+                    request.callback(json_body, request)
+
+                request.status = RequestStatus.success
             else:
-                self.sessions.append(ClientSession(trust_env=True))
+                request.status = RequestStatus.failed
 
-        session: ClientSession = self.sessions.pop(0)
-        self.sessions.append(session)
+                if request.on_failed:
+                    request.on_failed(status_code, request)
+                else:
+                    self.on_failed(status_code, request)
+        except Exception:
+            request.status = RequestStatus.error
+            et, ev, tb = sys.exc_info()
 
-        cr: ClientResponse = await session.request(
+            if et and ev and tb:
+                if request.on_error:
+                    request.on_error(et, ev, tb, request)
+                else:
+                    self.on_error(et, ev, tb, request)
+
+    def make_full_url(self, path: str) -> str:
+        """
+        Make relative api path into full url.
+        eg: make_full_url("/get") == "http://xxxxx/get"
+        """
+        url = self.url_base + path
+        return url
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        params: dict | None = None,
+        data: dict | None = None,
+        headers: dict | None = None,
+    ) -> requests.Response:
+        """
+        Add a new request.
+        :param method: GET, POST, PUT, DELETE, QUERY
+        :param path: url path for query
+        :param params: dict for query string
+        :param data: dict for body
+        :param headers: dict for headers
+        :return: requests.Response
+        """
+        request = Request(
+            method,
+            path,
+            params,
+            data,
+            headers
+        )
+        request = self.sign(request)
+
+        url = self.make_full_url(request.path)
+
+        response = requests.request(
             request.method,
             url,
             headers=request.headers,
             params=request.params,
             data=request.data,
-            json=request.json,
-            proxy=self.proxy
+            proxies=self.proxies,
         )
-
-        text: str = await cr.text()
-        status_code = cr.status
-
-        request.response = Response(status_code, text)
-        return request.response
-
-    async def _process_request(self, request: Request) -> None:
-        """发送请求到服务器，并对返回进行后续处理"""
-        try:
-            response: Response = await self._get_response(request)
-            status_code: int = response.status_code
-
-            # 2xx的代码表示处理成功
-            if status_code // 100 == 2:
-                request.callback(response.json(), request)
-            # 否则说明处理失败
-            else:
-                # 设置了专用失败回调
-                if request.on_failed:
-                    request.on_failed(status_code, request)
-                # 否则使用全局失败回调
-                else:
-                    self.on_failed(status_code, request)
-        except Exception:
-            t, v, tb = sys.exc_info()
-            # 设置了专用异常回调
-            if request.on_error:
-                request.on_error(t, v, tb, request)
-            # 否则使用全局异常回调
-            else:
-                self.on_error(t, v, tb, request)
-
-    def _make_full_url(self, path: str) -> str:
-        """组合根地址生成完整的请求路径"""
-        url: str = self.url_base + path
-        return url
-
-
-def start_event_loop(loop: AbstractEventLoop) -> None:
-    """启动事件循环"""
-    # 如果事件循环未运行，则创建后台线程来运行
-    if not loop.is_running():
-        thread = Thread(target=run_event_loop, args=(loop,))
-        thread.daemon = True
-        thread.start()
-
-
-def run_event_loop(loop: AbstractEventLoop) -> None:
-    """运行事件循环"""
-    set_event_loop(loop)
-    loop.run_forever()
+        return response
