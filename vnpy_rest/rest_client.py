@@ -21,17 +21,17 @@ Response = requests.Response
 
 class Request:
     """
-    请求对象
+    Request object
 
-    method: API的请求方法（GET, POST, PUT, DELETE, QUERY）
-    path: API的请求路径（不包含根地址）
-    callback: 请求成功的回调函数
-    params: 请求表单的参数字典
-    data: 请求主体数据，如果传入字典会被自动转换为json
-    headers: 请求头部的字典
-    on_failed: 请求失败的回调函数
-    on_error: 请求异常的回调函数
-    extra: 任意其他数据（用于回调时获取）
+    method: API request method (GET, POST, PUT, DELETE, QUERY)
+    path: API request path (without base URL)
+    callback: Callback function on request success
+    params: Dictionary of request parameters
+    data: Request body data, dictionaries will be automatically converted to JSON
+    headers: Dictionary of request headers
+    on_failed: Callback function on request failure
+    on_error: Callback function on request exception
+    extra: Any additional data (for use in callbacks)
     """
 
     def __init__(
@@ -45,8 +45,8 @@ class Request:
         on_failed: ON_FAILED_TYPE | None = None,
         on_error: ON_ERROR_TYPE | None = None,
         extra: Any | None = None,
-    ):
-        """"""
+    ) -> None:
+        """Initialize a request object"""
         self.method: str = method
         self.path: str = path
         self.callback: CALLBACK_TYPE | None = callback
@@ -61,7 +61,7 @@ class Request:
         self.response: requests.Response | None = None
 
     def __str__(self) -> str:
-        """"""
+        """String representation of the request"""
         if self.response is None:
             status_code = "terminated"
         else:
@@ -77,15 +77,15 @@ class Request:
 
 class RestClient:
     """
-    针对各类REST API的异步客户端
+    Asynchronous client for various REST APIs
 
-    * 重载sign方法来实现请求签名逻辑
-    * 重载on_failed方法来实现请求失败的标准回调处理
-    * 重载on_error方法来实现请求异常的标准回调处理
+    * Override the sign method to implement request signature logic
+    * Override the on_failed method to implement standard callback handling for request failures
+    * Override the on_error method to implement standard callback handling for request exceptions
     """
 
     def __init__(self) -> None:
-        """构造函数"""
+        """Constructor"""
         self.url_base: str = ""
         self.active: bool = False
 
@@ -99,7 +99,13 @@ class RestClient:
         proxy_host: str = "",
         proxy_port: int = 0
     ) -> None:
-        """传入REST API的根地址，初始化客户端"""
+        """
+        Initialize the client with the REST API base URL
+
+        :param url_base: Base URL for the REST API
+        :param proxy_host: Proxy host address
+        :param proxy_port: Proxy port number
+        """
         self.url_base = url_base
 
         if proxy_host and proxy_port:
@@ -107,7 +113,11 @@ class RestClient:
             self.proxies = {"http": proxy, "https": proxy}
 
     def start(self, n: int = 5) -> None:
-        """启动客户端的运行"""
+        """
+        Start the client
+
+        :param n: Number of worker threads
+        """
         if self.active:
             return
         self.active = True
@@ -116,11 +126,11 @@ class RestClient:
         self.pool.apply_async(self.run)
 
     def stop(self) -> None:
-        """停止客户端的运行"""
+        """Stop the client"""
         self.active = False
 
     def join(self) -> None:
-        """等待子线程退出"""
+        """Wait for threads to complete"""
         self.queue.join()
 
     def add_request(
@@ -135,7 +145,20 @@ class RestClient:
         on_error: ON_ERROR_TYPE | None = None,
         extra: Any | None = None,
     ) -> Request:
-        """添加新的请求任务"""
+        """
+        Add a new request task
+
+        :param method: HTTP method
+        :param path: API endpoint path
+        :param callback: Callback function for successful responses
+        :param params: Query parameters
+        :param data: Request body data
+        :param headers: HTTP headers
+        :param on_failed: Callback for failed requests
+        :param on_error: Callback for request exceptions
+        :param extra: Additional data to pass to callbacks
+        :return: Request object
+        """
         request: Request = Request(
             method,
             path,
@@ -151,7 +174,7 @@ class RestClient:
         return request
 
     def run(self) -> None:
-        """每个线程中执行的任务处理"""
+        """Process tasks in each thread"""
         try:
             session = requests.session()
             while self.active:
@@ -169,11 +192,21 @@ class RestClient:
                 self.on_error(et, ev, tb, None)
 
     def sign(self, request: Request) -> Request:
-        """签名函数（由用户继承实现具体签名逻辑）"""
+        """
+        Signature function (override to implement specific signature logic)
+
+        :param request: Request to sign
+        :return: Signed request
+        """
         return request
 
     def on_failed(self, status_code: int, request: Request) -> None:
-        """请求失败的默认回调"""
+        """
+        Default callback for request failures
+
+        :param status_code: HTTP status code
+        :param request: Failed request
+        """
         print("RestClient on failed" + "-" * 10)
         print(str(request))
 
@@ -184,7 +217,14 @@ class RestClient:
         tb: TracebackType,
         request: Request | None,
     ) -> None:
-        """请求触发异常的默认回调"""
+        """
+        Default callback for request exceptions
+
+        :param exception_type: Exception class
+        :param exception_value: Exception instance
+        :param tb: Traceback object
+        :param request: Request that caused the exception
+        """
         try:
             print("RestClient on error" + "-" * 10)
             print(self.exception_detail(exception_type, exception_value, tb, request))
@@ -198,7 +238,15 @@ class RestClient:
         tb: TracebackType,
         request: Request | None,
     ) -> str:
-        """将异常信息转化生成字符串"""
+        """
+        Convert exception information to string
+
+        :param exception_type: Exception class
+        :param exception_value: Exception instance
+        :param tb: Traceback object
+        :param request: Request that caused the exception
+        :return: Formatted exception details
+        """
         text = f"[{datetime.now().isoformat()}]: Unhandled RestClient Error:{exception_type}\n"
         text += f"request:{request}\n"
         text += "Exception trace: \n"
@@ -208,12 +256,17 @@ class RestClient:
         return text
 
     def process_request(self, request: Request, session: requests.Session) -> None:
-        """发送请求到服务器，并对返回进行后续处理"""
+        """
+        Send request to server and process response
+
+        :param request: Request to process
+        :param session: Requests session
+        """
         try:
-            # 对请求签名
+            # Sign the request
             request = self.sign(request)
 
-            # 发起同步请求
+            # Send synchronous request
             response: Response = session.request(
                 request.method,
                 self.make_full_url(request.path),
@@ -223,13 +276,13 @@ class RestClient:
                 proxies=self.proxies,
             )
 
-            # 绑定回报对象
+            # Bind response to request
             request.response = response
 
-            # 解析回报数据
+            # Parse response data
             status_code = response.status_code
 
-            if status_code // 100 == 2:  # 2xx都代表成功
+            if status_code // 100 == 2:  # 2xx indicates success
                 json_body: dict | None = None
 
                 if status_code != 204:
@@ -243,10 +296,10 @@ class RestClient:
                 else:
                     self.on_failed(status_code, request)
         except Exception:
-            # 获取异常信息
+            # Get exception information
             et, ev, tb = sys.exc_info()
 
-            # 推送异常回调
+            # Push exception callback
             if et and ev and tb:
                 if request.on_error:
                     request.on_error(et, ev, tb, request)
@@ -254,7 +307,12 @@ class RestClient:
                     self.on_error(et, ev, tb, request)
 
     def make_full_url(self, path: str) -> str:
-        """组合根地址生成完整的请求路径"""
+        """
+        Combine base URL and path to generate full request URL
+
+        :param path: API endpoint path
+        :return: Complete URL
+        """
         return self.url_base + path
 
     def request(
@@ -265,8 +323,17 @@ class RestClient:
         data: dict | None = None,
         headers: dict | None = None,
     ) -> Response:
-        """发起同步请求"""
-        # 创建请求对象
+        """
+        Make a synchronous request
+
+        :param method: HTTP method
+        :param path: API endpoint path
+        :param params: Query parameters
+        :param data: Request body data
+        :param headers: HTTP headers
+        :return: Response object
+        """
+        # Create request object
         request: Request = Request(
             method,
             path,
@@ -275,10 +342,10 @@ class RestClient:
             headers
         )
 
-        # 对请求签名
+        # Sign the request
         request = self.sign(request)
 
-        # 发起同步请求
+        # Send synchronous request
         response: Response = requests.request(
             request.method,
             self.make_full_url(request.path),
