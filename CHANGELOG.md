@@ -1,3 +1,9 @@
+# 1.2.0版本
+
+1. 替换aiohttp异步通讯模式，改为使用requests多线程模式
+2. 替换使用pyproject.toml配置
+3. ruff和mypy代码质量优化
+
 # 1.1.1版本
 
 1. 调整connector的初始化位置
