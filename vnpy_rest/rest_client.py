@@ -1,3 +1,7 @@
+"""
+Asynchronous HTTP client built on requests.
+"""
+
 import sys
 import traceback
 from datetime import datetime

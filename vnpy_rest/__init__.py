@@ -20,6 +20,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""
+Asynchronous REST client for VeighNa.
+"""
+
 from .rest_client import RestClient, Request, Response
 
 
