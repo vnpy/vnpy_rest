@@ -8,19 +8,19 @@ from datetime import datetime
 from multiprocessing.dummy import Pool
 from multiprocessing.pool import ThreadPool
 from queue import Empty, Queue
-from typing import Any
+from typing import Any, TypeAlias
 from collections.abc import Callable
 from types import TracebackType
 
 import requests
 
 
-CALLBACK_TYPE = Callable[[dict | None, "Request"], Any]
-ON_FAILED_TYPE = Callable[[int, "Request"], Any]
-ON_ERROR_TYPE = Callable[[type[BaseException], BaseException, TracebackType, "Request"], Any]
+CALLBACK_TYPE: TypeAlias = Callable[[dict | None, "Request"], Any]
+ON_FAILED_TYPE: TypeAlias = Callable[[int, "Request"], Any]
+ON_ERROR_TYPE: TypeAlias = Callable[[type[BaseException], BaseException, TracebackType, "Request"], Any]
 
 
-Response = requests.Response
+Response: TypeAlias = requests.Response
 
 
 class Request:
@@ -67,7 +67,7 @@ class Request:
     def __str__(self) -> str:
         """String representation of the request"""
         if self.response is None:
-            status_code = "terminated"
+            status_code: str = "terminated"
         else:
             status_code = str(self.response.status_code)
 
@@ -180,10 +180,10 @@ class RestClient:
     def run(self) -> None:
         """Process tasks in each thread"""
         try:
-            session = requests.session()
+            session: requests.Session = requests.session()
             while self.active:
                 try:
-                    request = self.queue.get(timeout=1)
+                    request: Request = self.queue.get(timeout=1)
                     try:
                         self.process_request(request, session)
                     finally:
@@ -191,6 +191,9 @@ class RestClient:
                 except Empty:
                     pass
         except Exception:
+            exc: type[BaseException] | None
+            value: BaseException | None
+            tb: TracebackType | None
             exc, value, tb = sys.exc_info()
             if exc and value and tb:
                 self.on_error(exc, value, tb, None)
@@ -251,7 +254,7 @@ class RestClient:
         :param request: Request that caused the exception
         :return: Formatted exception details
         """
-        text = f"[{datetime.now().isoformat()}]: Unhandled RestClient Error:{exc}\n"
+        text: str = f"[{datetime.now().isoformat()}]: Unhandled RestClient Error:{exc}\n"
         text += f"request:{request}\n"
         text += "Exception trace: \n"
         text += "".join(traceback.format_exception(exc, value, tb))
@@ -282,7 +285,7 @@ class RestClient:
             request.response = response
 
             # Parse response data
-            status_code = response.status_code
+            status_code: int = response.status_code
 
             if status_code // 100 == 2:  # 2xx indicates success
                 json_body: dict | None = None
@@ -299,6 +302,9 @@ class RestClient:
                     self.on_failed(status_code, request)
         except Exception:
             # Get exception information
+            exc: type[BaseException] | None
+            value: BaseException | None
+            tb: TracebackType | None
             exc, value, tb = sys.exc_info()
 
             # Push exception callback
